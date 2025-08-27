@@ -5,50 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Astrophotography — Askansz</title>
   <style>
-    /* Reset / base */
+    /* Base / reset */
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
-      margin: 0;                  /* edge to edge */
+      margin: 0;                     /* edge-to-edge */
       background: #000;
       color: #fff;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
     }
 
-    /* Edge-to-edge collage: exactly 2 columns, no gaps */
-    .gallery {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr); /* <<< 2 per row */
-      gap: 0;                                 /* no margins/gutters */
+    /* Masonry: two columns, no gaps */
+    .masonry {
+      display: flex;
+      width: 100vw;
       min-height: 100vh;
     }
-
-    /* Each tile has a fixed visual height so rows align perfectly.
-       We crop with object-fit: cover so any aspect ratio works.   */
-    .gallery img {
+    .col {
+      flex: 1 0 50%;
+      width: 50vw;                   /* lock to two columns */
+    }
+    .col img {
+      display: block;                /* removes inline-gap */
       width: 100%;
-      aspect-ratio: 3 / 2;  /* tweak if you want taller/shorter rows */
-      object-fit: cover;     /* fills the cell; crops edges if needed */
-      display: block;        /* removes inline-gap */
+      height: auto;                  /* keep original aspect */
       cursor: zoom-in;
       user-select: none;
       -webkit-user-drag: none;
     }
 
-    /* On very narrow screens, switch to 1 column so images stay big */
+    /* No gaps anywhere */
+    .masonry, .col { gap: 0; }
+    .col > * { margin: 0; }
+
+    /* Mobile: single column */
     @media (max-width: 640px) {
-      .gallery { grid-template-columns: 1fr; }
-      .gallery img { aspect-ratio: 4 / 3; } /* slightly taller on mobile */
+      .masonry { display: block; }
+      .col { width: 100vw; }
     }
 
-    /* Fullscreen lightbox */
+    /* Lightbox */
     .lightbox {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,.96);
-      display: none;               /* shown on click */
+      display: none;
       align-items: center;
       justify-content: center;
+      background: rgba(0,0,0,.96);
       z-index: 1000;
     }
     .lightbox.open { display: flex; }
@@ -57,13 +60,13 @@
       max-height: 96vh;
       width: auto;
       height: auto;
-      box-shadow: 0 0 40px rgba(0,0,0,.8);
       cursor: zoom-out;
+      box-shadow: 0 0 40px rgba(0,0,0,.8);
     }
     .close-btn {
       position: fixed;
       top: 14px;
-      right: 14px;                 /* top-right feels natural */
+      right: 14px;
       padding: 10px 14px;
       font-size: 18px;
       border: 1px solid rgba(255,255,255,.3);
@@ -76,25 +79,26 @@
     }
     .close-btn:hover { background: rgba(255,255,255,.08); }
 
-    /* Copyright — pinned, doesn’t steal layout space */
+    /* Copyright */
     footer {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       text-align: center;
       line-height: 1.25;
       font-size: 12px;
       padding: 10px 8px;
       color: #cfcfcf;
       background: linear-gradient(transparent, rgba(0,0,0,.65) 40%);
-      pointer-events: none; /* clicks go through */
+      pointer-events: none; /* don't block clicks */
     }
     footer span { display: block; }
   </style>
 </head>
 <body>
-  <div class="gallery" id="gallery"></div>
+  <div class="masonry" id="masonry">
+    <div class="col" id="colL"></div>
+    <div class="col" id="colR"></div>
+  </div>
 
   <!-- Lightbox -->
   <div class="lightbox" id="lightbox" aria-hidden="true">
@@ -102,7 +106,7 @@
     <img id="lightboxImg" alt="">
   </div>
 
-  <!-- Copyright (3 lines) -->
+  <!-- Copyright -->
   <footer>
     <span>© 2025 Askansz</span>
     <span>All rights reserved</span>
@@ -110,7 +114,7 @@
   </footer>
 
   <script>
-    // Put your image filenames here (exactly as they are in /images/, case-sensitive)
+    // Your images (exact filenames in /images/)
     const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
@@ -119,30 +123,55 @@
       "Orion nebula.jpg",
       "Red-nebula.jpg"
     ];
+    const FOLDER = "images/";
 
-    const FOLDER = "images/";         // folder in your repo
-    const gallery = document.getElementById("gallery");
+    const colL = document.getElementById("colL");
+    const colR = document.getElementById("colR");
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightboxImg");
     const closeBtn = document.getElementById("closeBtn");
 
-    // Build the 2-column collage
-    IMAGES.forEach((name, idx) => {
+    // Shuffle to “try” different orders each load
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Append the image to the column with the smaller current height
+    function placeIntoShortestColumn(el) {
+      const hL = colL.getBoundingClientRect().height;
+      const hR = colR.getBoundingClientRect().height;
+      (hL <= hR ? colL : colR).appendChild(el);
+    }
+
+    // Build masonry
+    const files = shuffle(IMAGES.slice());
+    const allImgs = []; // for lightbox navigation order
+    files.forEach((name, index) => {
       const img = new Image();
       img.src = FOLDER + name;
       img.alt = name;
       img.loading = "lazy";
       img.decoding = "async";
-      img.addEventListener("click", () => openLightbox(idx));
-      gallery.appendChild(img);
+
+      // Only decide placement after natural size is known
+      img.addEventListener("load", () => {
+        placeIntoShortestColumn(img);
+      });
+
+      img.addEventListener("click", () => openLightbox(allImgs.indexOf(img)));
+      allImgs.push(img);
     });
 
-    // Lightbox logic (open/close + arrow keys)
+    // Lightbox
     let currentIndex = 0;
-
-    function openLightbox(index) {
-      currentIndex = index;
-      lightboxImg.src = FOLDER + IMAGES[currentIndex];
+    function openLightbox(idx) {
+      if (idx < 0) idx = 0;
+      currentIndex = idx;
+      lightboxImg.src = allImgs[currentIndex].src;
       lightbox.classList.add("open");
       lightbox.setAttribute("aria-hidden", "false");
     }
@@ -151,7 +180,6 @@
       lightbox.setAttribute("aria-hidden", "true");
       lightboxImg.removeAttribute("src");
     }
-
     closeBtn.addEventListener("click", closeLightbox);
     lightbox.addEventListener("click", (e) => {
       if (e.target === lightbox || e.target === lightboxImg) closeLightbox();
@@ -160,12 +188,27 @@
       if (!lightbox.classList.contains("open")) return;
       if (e.key === "Escape") closeLightbox();
       if (e.key === "ArrowRight") {
-        currentIndex = (currentIndex + 1) % IMAGES.length;
-        lightboxImg.src = FOLDER + IMAGES[currentIndex];
+        currentIndex = (currentIndex + 1) % allImgs.length;
+        lightboxImg.src = allImgs[currentIndex].src;
       }
       if (e.key === "ArrowLeft") {
-        currentIndex = (currentIndex - 1 + IMAGES.length) % IMAGES.length;
-        lightboxImg.src = FOLDER + IMAGES[currentIndex];
+        currentIndex = (currentIndex - 1 + allImgs.length) % allImgs.length;
+        lightboxImg.src = allImgs[currentIndex].src;
+      }
+    });
+
+    // Re-flow on resize breakpoint changes (2 cols ↔ 1 col)
+    let lastIsMobile = window.matchMedia("(max-width: 640px)").matches;
+    window.addEventListener("resize", () => {
+      const isMobile = window.matchMedia("(max-width: 640px)").matches;
+      if (isMobile === lastIsMobile) return;
+      lastIsMobile = isMobile;
+
+      // Move all images into left column, then rebalance if desktop
+      [...colR.children].forEach(node => colL.appendChild(node));
+      if (!isMobile) {
+        // Rebalance into two columns by current heights
+        [...colL.children].forEach(node => placeIntoShortestColumn(node));
       }
     });
   </script>
