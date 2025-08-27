@@ -13,27 +13,67 @@
       color: #fff;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
     }
+
+    /* Masonry: three columns, no gaps */
     .masonry { display: flex; width: 100vw; min-height: 100vh; }
-    .col { flex: 1 0 50%; width: 50vw; }
+    .col { flex: 1 0 33.33%; width: 33.33vw; }
     .col img { display: block; width: 100%; height: auto; cursor: zoom-in; user-select: none; -webkit-user-drag: none; }
     .masonry, .col { gap: 0; }
     .col > * { margin: 0; }
-    @media (max-width: 640px) { .masonry { display: block; } .col { width: 100vw; } }
 
+    /* Mobile: 1 col, Tablet: 2 cols */
+    @media (max-width: 640px) { .masonry { display: block; } .col { width: 100vw; } }
+    @media (min-width: 641px) and (max-width: 1000px) {
+      .masonry { display: flex; }
+      .col { flex: 1 0 50%; width: 50vw; }
+      #col3 { display: none; }
+    }
+
+    /* Lightbox */
     .lightbox { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.96); z-index: 1000; }
     .lightbox.open { display: flex; }
     .lightbox img { max-width: 96vw; max-height: 96vh; width: auto; height: auto; cursor: zoom-out; box-shadow: 0 0 40px rgba(0,0,0,.8); }
     .close-btn { position: fixed; top: 14px; right: 14px; padding: 10px 14px; font-size: 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; z-index: 1001; cursor: pointer; backdrop-filter: blur(6px); }
     .close-btn:hover { background: rgba(255,255,255,.08); }
 
-    footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; line-height: 1.25; font-size: 12px; padding: 10px 8px; color: #cfcfcf; background: linear-gradient(transparent, rgba(0,0,0,.65) 40%); pointer-events: none; }
+    footer {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      text-align: center;
+      line-height: 1.4;
+      font-size: 12px;
+      padding: 10px 8px 30px;
+      color: #cfcfcf;
+      background: linear-gradient(transparent, rgba(0,0,0,.65) 40%);
+    }
     footer span { display: block; }
+
+    .contact {
+      margin-top: 6px;
+      font-size: 13px;
+    }
+    .contact a {
+      color: #6ab4ff;
+      text-decoration: none;
+    }
+    .copy-btn {
+      margin-left: 6px;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 4px;
+      background: rgba(0,0,0,.6);
+      color: #fff;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,.2); }
   </style>
 </head>
 <body>
   <div class="masonry" id="masonry">
-    <div class="col" id="colL"></div>
-    <div class="col" id="colR"></div>
+    <div class="col" id="col1"></div>
+    <div class="col" id="col2"></div>
+    <div class="col" id="col3"></div>
   </div>
 
   <div class="lightbox" id="lightbox" aria-hidden="true">
@@ -45,10 +85,13 @@
     <span>© 2025 Askansz</span>
     <span>All rights reserved</span>
     <span>Unauthorized use is prohibited</span>
+    <div class="contact">
+      Contact: <a href="mailto:buisness@askansz.com" id="emailLink">buisness@askansz.com</a>
+      <button class="copy-btn" id="copyBtn">Copy</button>
+    </div>
   </footer>
 
   <script>
-    // Filenames must match exactly (case-sensitive)
     const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
@@ -56,55 +99,41 @@
       "Orion Nebula Wide.jpg",
       "Orion nebula.jpg",
       "Red-nebula.jpg",
-      "Crescent Moon.jpg"   // <-- make sure this is the real name in /images/
+      "Crescent Moon.jpg"
     ];
     const FOLDER = "images/";
 
-    const colL = document.getElementById("colL");
-    const colR = document.getElementById("colR");
+    const cols = [document.getElementById("col1"), document.getElementById("col2"), document.getElementById("col3")];
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightboxImg");
     const closeBtn = document.getElementById("closeBtn");
 
-    // Shuffle for variety
+    let heights = [0,0,0];
+    const allImgs = [];
+
     function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
 
-    // Track current estimated heights so we can place BEFORE appending
-    let hL = 0, hR = 0;
-
     function placePredicted(imgEl) {
-      // Predict rendered height = columnWidth * (naturalH / naturalW)
-      const colWidth = colL.clientWidth || (window.innerWidth / 2);
+      const colWidth = cols[0].clientWidth || (window.innerWidth / 3);
       const ratio = imgEl.naturalHeight / imgEl.naturalWidth || 1;
       const predicted = colWidth * ratio;
-
-      if (hL <= hR) {
-        colL.appendChild(imgEl);
-        hL += predicted;
-      } else {
-        colR.appendChild(imgEl);
-        hR += predicted;
-      }
+      const minIndex = heights.indexOf(Math.min(...heights));
+      cols[minIndex].appendChild(imgEl);
+      heights[minIndex] += predicted;
     }
 
     const files = shuffle(IMAGES.slice());
-    const allImgs = [];
-
     files.forEach((name) => {
       const img = new Image();
       img.src = FOLDER + name;
       img.alt = name;
       img.loading = "lazy";
       img.decoding = "async";
-
       img.addEventListener("load", () => placePredicted(img));
-      img.addEventListener("error", () => console.warn("Missing image:", img.src));
-
       img.addEventListener("click", () => openLightbox(allImgs.indexOf(img)));
       allImgs.push(img);
     });
 
-    // Lightbox
     let currentIndex = 0;
     function openLightbox(idx) {
       currentIndex = Math.max(0, idx);
@@ -126,20 +155,13 @@
       if (e.key === "ArrowLeft")  { currentIndex = (currentIndex - 1 + allImgs.length) % allImgs.length; lightboxImg.src = allImgs[currentIndex].src; }
     });
 
-    // Recalculate estimates on breakpoint change
-    let lastIsMobile = matchMedia("(max-width: 640px)").matches;
-    addEventListener("resize", () => {
-      const isMobile = matchMedia("(max-width: 640px)").matches;
-      if (isMobile === lastIsMobile) return;
-      lastIsMobile = isMobile;
-
-      // Reset and reflow
-      hL = hR = 0;
-      const nodes = [...colL.children, ...colR.children];
-      colL.innerHTML = ""; colR.innerHTML = "";
-      nodes.forEach(placePredicted);
+    // Copy email
+    document.getElementById("copyBtn").addEventListener("click", () => {
+      const email = document.getElementById("emailLink").textContent;
+      navigator.clipboard.writeText(email).then(() => {
+        alert("Email copied: " + email);
+      });
     });
   </script>
 </body>
 </html>
-
