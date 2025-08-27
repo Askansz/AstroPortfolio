@@ -80,11 +80,12 @@
   <script>
     const imageFolder = "images/";
     const imageList = [
-      // Add your image filenames here, e.g. "1.jpg", "2.png", "3.jpeg"
-      // Example:
-      "astro1.jpg",
-      "astro2.jpg",
-      "astro3.png"
+      "Andromeda Galaxy.jpg",
+      "Full Moon.png",
+      "M27.jpg",
+      "Orion Nebula Wide.jpg",
+      "Orion nebula.jpg",
+      "Red-nebula.jpg"
     ];
 
     const gallery = document.getElementById("gallery");
@@ -96,6 +97,7 @@
     imageList.forEach(file => {
       const img = document.createElement("img");
       img.src = imageFolder + file;
+      img.alt = file;
       img.addEventListener("click", () => {
         lightbox.style.display = "flex";
         lightboxImg.src = img.src;
