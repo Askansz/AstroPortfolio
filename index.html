@@ -5,92 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Astrophotography — Askansz</title>
   <style>
-    /* Base / reset */
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
-      margin: 0;                     /* edge-to-edge */
+      margin: 0;
       background: #000;
       color: #fff;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
     }
-
-    /* Masonry: two columns, no gaps */
-    .masonry {
-      display: flex;
-      width: 100vw;
-      min-height: 100vh;
-    }
-    .col {
-      flex: 1 0 50%;
-      width: 50vw;                   /* lock to two columns */
-    }
-    .col img {
-      display: block;                /* removes inline-gap */
-      width: 100%;
-      height: auto;                  /* keep original aspect */
-      cursor: zoom-in;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-
-    /* No gaps anywhere */
+    .masonry { display: flex; width: 100vw; min-height: 100vh; }
+    .col { flex: 1 0 50%; width: 50vw; }
+    .col img { display: block; width: 100%; height: auto; cursor: zoom-in; user-select: none; -webkit-user-drag: none; }
     .masonry, .col { gap: 0; }
     .col > * { margin: 0; }
+    @media (max-width: 640px) { .masonry { display: block; } .col { width: 100vw; } }
 
-    /* Mobile: single column */
-    @media (max-width: 640px) {
-      .masonry { display: block; }
-      .col { width: 100vw; }
-    }
-
-    /* Lightbox */
-    .lightbox {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,.96);
-      z-index: 1000;
-    }
+    .lightbox { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.96); z-index: 1000; }
     .lightbox.open { display: flex; }
-    .lightbox img {
-      max-width: 96vw;
-      max-height: 96vh;
-      width: auto;
-      height: auto;
-      cursor: zoom-out;
-      box-shadow: 0 0 40px rgba(0,0,0,.8);
-    }
-    .close-btn {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      padding: 10px 14px;
-      font-size: 18px;
-      border: 1px solid rgba(255,255,255,.3);
-      border-radius: 10px;
-      background: rgba(0,0,0,.6);
-      color: #fff;
-      z-index: 1001;
-      cursor: pointer;
-      backdrop-filter: blur(6px);
-    }
+    .lightbox img { max-width: 96vw; max-height: 96vh; width: auto; height: auto; cursor: zoom-out; box-shadow: 0 0 40px rgba(0,0,0,.8); }
+    .close-btn { position: fixed; top: 14px; right: 14px; padding: 10px 14px; font-size: 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; z-index: 1001; cursor: pointer; backdrop-filter: blur(6px); }
     .close-btn:hover { background: rgba(255,255,255,.08); }
 
-    /* Copyright */
-    footer {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      text-align: center;
-      line-height: 1.25;
-      font-size: 12px;
-      padding: 10px 8px;
-      color: #cfcfcf;
-      background: linear-gradient(transparent, rgba(0,0,0,.65) 40%);
-      pointer-events: none; /* don't block clicks */
-    }
+    footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; line-height: 1.25; font-size: 12px; padding: 10px 8px; color: #cfcfcf; background: linear-gradient(transparent, rgba(0,0,0,.65) 40%); pointer-events: none; }
     footer span { display: block; }
   </style>
 </head>
@@ -100,13 +36,11 @@
     <div class="col" id="colR"></div>
   </div>
 
-  <!-- Lightbox -->
   <div class="lightbox" id="lightbox" aria-hidden="true">
     <button class="close-btn" id="closeBtn" aria-label="Close (Esc)">✕ Close</button>
     <img id="lightboxImg" alt="">
   </div>
 
-  <!-- Copyright -->
   <footer>
     <span>© 2025 Askansz</span>
     <span>All rights reserved</span>
@@ -114,15 +48,15 @@
   </footer>
 
   <script>
-    // Your images (exact filenames in /images/)
+    // Filenames must match exactly (case-sensitive)
     const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
       "M27.jpg",
       "Orion Nebula Wide.jpg",
       "Orion nebula.jpg",
-      "Red-nebula.jpg"
-      "Cresent Moon.jpg"
+      "Red-nebula.jpg",
+      "Crescent Moon.jpg"   // <-- make sure this is the real name in /images/
     ];
     const FOLDER = "images/";
 
@@ -132,36 +66,39 @@
     const lightboxImg = document.getElementById("lightboxImg");
     const closeBtn = document.getElementById("closeBtn");
 
-    // Shuffle to “try” different orders each load
-    function shuffle(arr) {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+    // Shuffle for variety
+    function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+    // Track current estimated heights so we can place BEFORE appending
+    let hL = 0, hR = 0;
+
+    function placePredicted(imgEl) {
+      // Predict rendered height = columnWidth * (naturalH / naturalW)
+      const colWidth = colL.clientWidth || (window.innerWidth / 2);
+      const ratio = imgEl.naturalHeight / imgEl.naturalWidth || 1;
+      const predicted = colWidth * ratio;
+
+      if (hL <= hR) {
+        colL.appendChild(imgEl);
+        hL += predicted;
+      } else {
+        colR.appendChild(imgEl);
+        hR += predicted;
       }
-      return arr;
     }
 
-    // Append the image to the column with the smaller current height
-    function placeIntoShortestColumn(el) {
-      const hL = colL.getBoundingClientRect().height;
-      const hR = colR.getBoundingClientRect().height;
-      (hL <= hR ? colL : colR).appendChild(el);
-    }
-
-    // Build masonry
     const files = shuffle(IMAGES.slice());
-    const allImgs = []; // for lightbox navigation order
-    files.forEach((name, index) => {
+    const allImgs = [];
+
+    files.forEach((name) => {
       const img = new Image();
       img.src = FOLDER + name;
       img.alt = name;
       img.loading = "lazy";
       img.decoding = "async";
 
-      // Only decide placement after natural size is known
-      img.addEventListener("load", () => {
-        placeIntoShortestColumn(img);
-      });
+      img.addEventListener("load", () => placePredicted(img));
+      img.addEventListener("error", () => console.warn("Missing image:", img.src));
 
       img.addEventListener("click", () => openLightbox(allImgs.indexOf(img)));
       allImgs.push(img);
@@ -170,8 +107,7 @@
     // Lightbox
     let currentIndex = 0;
     function openLightbox(idx) {
-      if (idx < 0) idx = 0;
-      currentIndex = idx;
+      currentIndex = Math.max(0, idx);
       lightboxImg.src = allImgs[currentIndex].src;
       lightbox.classList.add("open");
       lightbox.setAttribute("aria-hidden", "false");
@@ -182,35 +118,26 @@
       lightboxImg.removeAttribute("src");
     }
     closeBtn.addEventListener("click", closeLightbox);
-    lightbox.addEventListener("click", (e) => {
-      if (e.target === lightbox || e.target === lightboxImg) closeLightbox();
-    });
+    lightbox.addEventListener("click", (e) => { if (e.target === lightbox || e.target === lightboxImg) closeLightbox(); });
     document.addEventListener("keydown", (e) => {
       if (!lightbox.classList.contains("open")) return;
       if (e.key === "Escape") closeLightbox();
-      if (e.key === "ArrowRight") {
-        currentIndex = (currentIndex + 1) % allImgs.length;
-        lightboxImg.src = allImgs[currentIndex].src;
-      }
-      if (e.key === "ArrowLeft") {
-        currentIndex = (currentIndex - 1 + allImgs.length) % allImgs.length;
-        lightboxImg.src = allImgs[currentIndex].src;
-      }
+      if (e.key === "ArrowRight") { currentIndex = (currentIndex + 1) % allImgs.length; lightboxImg.src = allImgs[currentIndex].src; }
+      if (e.key === "ArrowLeft")  { currentIndex = (currentIndex - 1 + allImgs.length) % allImgs.length; lightboxImg.src = allImgs[currentIndex].src; }
     });
 
-    // Re-flow on resize breakpoint changes (2 cols ↔ 1 col)
-    let lastIsMobile = window.matchMedia("(max-width: 640px)").matches;
-    window.addEventListener("resize", () => {
-      const isMobile = window.matchMedia("(max-width: 640px)").matches;
+    // Recalculate estimates on breakpoint change
+    let lastIsMobile = matchMedia("(max-width: 640px)").matches;
+    addEventListener("resize", () => {
+      const isMobile = matchMedia("(max-width: 640px)").matches;
       if (isMobile === lastIsMobile) return;
       lastIsMobile = isMobile;
 
-      // Move all images into left column, then rebalance if desktop
-      [...colR.children].forEach(node => colL.appendChild(node));
-      if (!isMobile) {
-        // Rebalance into two columns by current heights
-        [...colL.children].forEach(node => placeIntoShortestColumn(node));
-      }
+      // Reset and reflow
+      hL = hR = 0;
+      const nodes = [...colL.children, ...colR.children];
+      colL.innerHTML = ""; colR.innerHTML = "";
+      nodes.forEach(placePredicted);
     });
   </script>
 </body>
