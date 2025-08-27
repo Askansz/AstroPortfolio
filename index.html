@@ -1,85 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Askansz Portfolio</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Astrophotography — Askansz</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    /* Reset / base */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      background: black;
-      color: white;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
+      margin: 0;                  /* edge to edge */
+      background: #000;
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
     }
+
+    /* Edge-to-edge collage: exactly 2 columns, no gaps */
     .gallery {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      grid-auto-rows: 200px;
-      gap: 0;
-      flex-grow: 1;
+      grid-template-columns: repeat(2, 1fr); /* <<< 2 per row */
+      gap: 0;                                 /* no margins/gutters */
+      min-height: 100vh;
     }
+
+    /* Each tile has a fixed visual height so rows align perfectly.
+       We crop with object-fit: cover so any aspect ratio works.   */
     .gallery img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
-      cursor: pointer;
+      aspect-ratio: 3 / 2;  /* tweak if you want taller/shorter rows */
+      object-fit: cover;     /* fills the cell; crops edges if needed */
+      display: block;        /* removes inline-gap */
+      cursor: zoom-in;
+      user-select: none;
+      -webkit-user-drag: none;
     }
+
+    /* On very narrow screens, switch to 1 column so images stay big */
+    @media (max-width: 640px) {
+      .gallery { grid-template-columns: 1fr; }
+      .gallery img { aspect-ratio: 4 / 3; } /* slightly taller on mobile */
+    }
+
+    /* Fullscreen lightbox */
     .lightbox {
-      display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.95);
-      justify-content: center;
+      background: rgba(0,0,0,.96);
+      display: none;               /* shown on click */
       align-items: center;
-      z-index: 999;
+      justify-content: center;
+      z-index: 1000;
     }
+    .lightbox.open { display: flex; }
     .lightbox img {
-      max-width: 95%;
-      max-height: 95%;
+      max-width: 96vw;
+      max-height: 96vh;
+      width: auto;
+      height: auto;
+      box-shadow: 0 0 40px rgba(0,0,0,.8);
+      cursor: zoom-out;
     }
     .close-btn {
       position: fixed;
-      top: 20px;
-      right: 30px;
-      font-size: 30px;
-      color: white;
-      background: rgba(0,0,0,0.5);
-      border: none;
+      top: 14px;
+      right: 14px;                 /* top-right feels natural */
+      padding: 10px 14px;
+      font-size: 18px;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 10px;
+      background: rgba(0,0,0,.6);
+      color: #fff;
+      z-index: 1001;
       cursor: pointer;
-      padding: 10px 15px;
-      border-radius: 5px;
+      backdrop-filter: blur(6px);
     }
+    .close-btn:hover { background: rgba(255,255,255,.08); }
+
+    /* Copyright — pinned, doesn’t steal layout space */
     footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       text-align: center;
+      line-height: 1.25;
       font-size: 12px;
-      padding: 10px;
-      background: black;
+      padding: 10px 8px;
+      color: #cfcfcf;
+      background: linear-gradient(transparent, rgba(0,0,0,.65) 40%);
+      pointer-events: none; /* clicks go through */
     }
+    footer span { display: block; }
   </style>
 </head>
 <body>
   <div class="gallery" id="gallery"></div>
 
-  <div class="lightbox" id="lightbox">
-    <button class="close-btn" id="closeBtn">✕</button>
-    <img id="lightboxImg" src="" alt="">
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <button class="close-btn" id="closeBtn" aria-label="Close (Esc)">✕ Close</button>
+    <img id="lightboxImg" alt="">
   </div>
 
+  <!-- Copyright (3 lines) -->
   <footer>
-    <p>© 2025 Askansz</p>
-    <p>All rights reserved</p>
-    <p>Unauthorized use is prohibited</p>
+    <span>© 2025 Askansz</span>
+    <span>All rights reserved</span>
+    <span>Unauthorized use is prohibited</span>
   </footer>
 
   <script>
-    const imageFolder = "images/";
-    const imageList = [
+    // Put your image filenames here (exactly as they are in /images/, case-sensitive)
+    const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
       "M27.jpg",
@@ -88,34 +120,52 @@
       "Red-nebula.jpg"
     ];
 
+    const FOLDER = "images/";         // folder in your repo
     const gallery = document.getElementById("gallery");
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightboxImg");
     const closeBtn = document.getElementById("closeBtn");
 
-    // Load images into gallery
-    imageList.forEach(file => {
-      const img = document.createElement("img");
-      img.src = imageFolder + file;
-      img.alt = file;
-      img.addEventListener("click", () => {
-        lightbox.style.display = "flex";
-        lightboxImg.src = img.src;
-      });
+    // Build the 2-column collage
+    IMAGES.forEach((name, idx) => {
+      const img = new Image();
+      img.src = FOLDER + name;
+      img.alt = name;
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.addEventListener("click", () => openLightbox(idx));
       gallery.appendChild(img);
     });
 
-    // Close lightbox
-    closeBtn.addEventListener("click", () => {
-      lightbox.style.display = "none";
-      lightboxImg.src = "";
-    });
+    // Lightbox logic (open/close + arrow keys)
+    let currentIndex = 0;
 
-    // Also close if background is clicked
+    function openLightbox(index) {
+      currentIndex = index;
+      lightboxImg.src = FOLDER + IMAGES[currentIndex];
+      lightbox.classList.add("open");
+      lightbox.setAttribute("aria-hidden", "false");
+    }
+    function closeLightbox() {
+      lightbox.classList.remove("open");
+      lightbox.setAttribute("aria-hidden", "true");
+      lightboxImg.removeAttribute("src");
+    }
+
+    closeBtn.addEventListener("click", closeLightbox);
     lightbox.addEventListener("click", (e) => {
-      if (e.target === lightbox) {
-        lightbox.style.display = "none";
-        lightboxImg.src = "";
+      if (e.target === lightbox || e.target === lightboxImg) closeLightbox();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (!lightbox.classList.contains("open")) return;
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowRight") {
+        currentIndex = (currentIndex + 1) % IMAGES.length;
+        lightboxImg.src = FOLDER + IMAGES[currentIndex];
+      }
+      if (e.key === "ArrowLeft") {
+        currentIndex = (currentIndex - 1 + IMAGES.length) % IMAGES.length;
+        lightboxImg.src = FOLDER + IMAGES[currentIndex];
       }
     });
   </script>
