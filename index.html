@@ -12,16 +12,34 @@
       background: #000;
       color: #fff;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none;          /* block iOS long-press save */
     }
 
-    /* Masonry: three columns, no gaps */
+    /* Masonry: three columns, no gaps, edge-to-edge */
     .masonry { display: flex; width: 100vw; min-height: 100vh; }
-    .col { flex: 1 0 33.33%; width: 33.33vw; }
-    .col img { display: block; width: 100%; height: auto; cursor: zoom-in; user-select: none; -webkit-user-drag: none; }
+    .col { position: relative; flex: 1 0 33.33%; width: 33.33vw; }
+    .tile { position: relative; }           /* wrapper so we can place the shield */
+    .img {
+      display: block;
+      width: 100%;
+      height: auto;                         /* keep original aspect */
+      -webkit-user-drag: none;
+      user-drag: none;
+      pointer-events: none;                 /* all interaction goes to the shield */
+    }
+    /* The transparent shield that captures clicks/right-clicks */
+    .shield {
+      position: absolute; inset: 0;
+      background: transparent;
+      cursor: zoom-in;
+    }
+
+    /* No gaps anywhere */
     .masonry, .col { gap: 0; }
     .col > * { margin: 0; }
 
-    /* Mobile: 1 col, Tablet: 2 cols */
+    /* Responsive: 1 col mobile, 2 col tablet */
     @media (max-width: 640px) { .masonry { display: block; } .col { width: 100vw; } }
     @media (min-width: 641px) and (max-width: 1000px) {
       .masonry { display: flex; }
@@ -36,35 +54,20 @@
     .close-btn { position: fixed; top: 14px; right: 14px; padding: 10px 14px; font-size: 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; z-index: 1001; cursor: pointer; backdrop-filter: blur(6px); }
     .close-btn:hover { background: rgba(255,255,255,.08); }
 
+    /* Footer */
     footer {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      text-align: center;
-      line-height: 1.4;
-      font-size: 12px;
-      padding: 10px 8px 30px;
-      color: #cfcfcf;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      text-align: center; line-height: 1.4; font-size: 12px;
+      padding: 10px 8px 34px; color: #cfcfcf;
       background: linear-gradient(transparent, rgba(0,0,0,.65) 40%);
     }
     footer span { display: block; }
-
-    .contact {
-      margin-top: 6px;
-      font-size: 13px;
-    }
-    .contact a {
-      color: #6ab4ff;
-      text-decoration: none;
-    }
+    .contact { margin-top: 6px; font-size: 13px; }
+    .contact a { color: #6ab4ff; text-decoration: none; }
     .copy-btn {
-      margin-left: 6px;
-      font-size: 11px;
-      padding: 2px 6px;
-      cursor: pointer;
-      border: 1px solid rgba(255,255,255,.3);
-      border-radius: 4px;
-      background: rgba(0,0,0,.6);
-      color: #fff;
+      margin-left: 6px; font-size: 11px; padding: 2px 6px; cursor: pointer;
+      border: 1px solid rgba(255,255,255,.3); border-radius: 4px;
+      background: rgba(0,0,0,.6); color: #fff;
     }
     .copy-btn:hover { background: rgba(255,255,255,.2); }
   </style>
@@ -86,12 +89,13 @@
     <span>All rights reserved</span>
     <span>Unauthorized use is prohibited</span>
     <div class="contact">
-      Contact: <a href="mailto:buisness@askansz.com" id="emailLink">buisness@askansz.com</a>
-      <button class="copy-btn" id="copyBtn">Copy</button>
+      Contact: <a href="mailto:example@mail.com" id="emailLink">example@mail.com</a>
+      <button class="copy-btn" id="copyBtn" type="button">Copy</button>
     </div>
   </footer>
 
   <script>
+    // ------------- CONFIG -------------
     const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
@@ -101,43 +105,72 @@
       "Red-nebula.jpg",
       "Crescent Moon.jpg"
     ];
-    const FOLDER = "images/";
+    const FOLDER = "images/";        // where your images live
+    // ------------- /CONFIG ------------
 
     const cols = [document.getElementById("col1"), document.getElementById("col2"), document.getElementById("col3")];
+    const heights = [0,0,0];         // running height totals for each column
+    const allTiles = [];              // keep order for lightbox
+
+    // Deterministic layout:
+    // 1) preload all images to get natural sizes
+    // 2) in the given IMAGES order, place each into the shortest column
+    function preload(files) {
+      return Promise.all(files.map(name => new Promise((resolve) => {
+        const img = new Image();
+        img.src = FOLDER + name;
+        img.alt = name;
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.addEventListener("load", () => resolve({img, name, w: img.naturalWidth || 1, h: img.naturalHeight || 1}));
+        img.addEventListener("error", () => resolve({img, name, w: 1, h: 1}));
+      })));
+    }
+
+    function placeTile(data) {
+      const {img, name, w, h} = data;
+      const colWidth = cols[0].clientWidth || (window.innerWidth / 3);
+      const predicted = colWidth * (h / w);
+
+      // build tile wrapper with transparent shield on top
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      tile.style.position = "relative";
+
+      img.className = "img";
+      tile.appendChild(img);
+
+      const shield = document.createElement("div");
+      shield.className = "shield";
+      shield.addEventListener("click", () => openLightbox(allTiles.indexOf(tile)));
+      shield.addEventListener("contextmenu", e => e.preventDefault()); // block right-click on the tile
+      tile.appendChild(shield);
+
+      // append to shortest column
+      const i = heights.indexOf(Math.min(...heights));
+      cols[i].appendChild(tile);
+      heights[i] += predicted;
+
+      allTiles.push(tile);
+    }
+
+    preload(IMAGES).then(list => {
+      IMAGES.forEach(name => {
+        const data = list.find(x => x.name === name);
+        placeTile(data);
+      });
+    });
+
+    // Lightbox
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightboxImg");
     const closeBtn = document.getElementById("closeBtn");
-
-    let heights = [0,0,0];
-    const allImgs = [];
-
-    function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
-
-    function placePredicted(imgEl) {
-      const colWidth = cols[0].clientWidth || (window.innerWidth / 3);
-      const ratio = imgEl.naturalHeight / imgEl.naturalWidth || 1;
-      const predicted = colWidth * ratio;
-      const minIndex = heights.indexOf(Math.min(...heights));
-      cols[minIndex].appendChild(imgEl);
-      heights[minIndex] += predicted;
-    }
-
-    const files = shuffle(IMAGES.slice());
-    files.forEach((name) => {
-      const img = new Image();
-      img.src = FOLDER + name;
-      img.alt = name;
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.addEventListener("load", () => placePredicted(img));
-      img.addEventListener("click", () => openLightbox(allImgs.indexOf(img)));
-      allImgs.push(img);
-    });
-
     let currentIndex = 0;
+
     function openLightbox(idx) {
       currentIndex = Math.max(0, idx);
-      lightboxImg.src = allImgs[currentIndex].src;
+      const img = allTiles[currentIndex].querySelector("img");
+      lightboxImg.src = img.src;
       lightbox.classList.add("open");
       lightbox.setAttribute("aria-hidden", "false");
     }
@@ -151,16 +184,26 @@
     document.addEventListener("keydown", (e) => {
       if (!lightbox.classList.contains("open")) return;
       if (e.key === "Escape") closeLightbox();
-      if (e.key === "ArrowRight") { currentIndex = (currentIndex + 1) % allImgs.length; lightboxImg.src = allImgs[currentIndex].src; }
-      if (e.key === "ArrowLeft")  { currentIndex = (currentIndex - 1 + allImgs.length) % allImgs.length; lightboxImg.src = allImgs[currentIndex].src; }
+      if (e.key === "ArrowRight") { currentIndex = (currentIndex + 1) % allTiles.length; openLightbox(currentIndex); }
+      if (e.key === "ArrowLeft")  { currentIndex = (currentIndex - 1 + allTiles.length) % allTiles.length; openLightbox(currentIndex); }
     });
 
     // Copy email
     document.getElementById("copyBtn").addEventListener("click", () => {
       const email = document.getElementById("emailLink").textContent;
-      navigator.clipboard.writeText(email).then(() => {
-        alert("Email copied: " + email);
-      });
+      navigator.clipboard.writeText(email).then(() => alert("Email copied: " + email));
+    });
+
+    // --- “anti-download” friction (bypassable, but discourages) ---
+    // Disable global context menu & drag
+    document.addEventListener("contextmenu", e => e.preventDefault());
+    document.addEventListener("dragstart", e => e.preventDefault());
+
+    // Block a few common “save” key combos (still bypassable via dev tools)
+    document.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === "s" || k === "p" || k === "u")) e.preventDefault();
+      if ((e.ctrlKey && e.shiftKey && (k === "i" || k === "j")) || k === "f12") e.preventDefault();
     });
   </script>
 </body>
