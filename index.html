@@ -16,42 +16,65 @@
       -webkit-touch-callout: none;
     }
 
-    /* Masonry (3 columns) */
-    .masonry {
-      display: flex;
-      align-items: flex-start;
+    /* Masonry via CSS columns (ultra-stable) */
+    .wall {
+      column-count: 3;           /* desktop: 3 columns */
+      column-gap: 0;             /* no gaps */
       width: 100vw;
       min-height: 100vh;
     }
-    .col { position: relative; flex: 1 0 33.33%; width: 33.33vw; }
-    .tile { position: relative; }
-    .img {
+    /* Tablet */
+    @media (max-width: 1000px) { .wall { column-count: 2; } }
+    /* Mobile */
+    @media (max-width: 640px)  { .wall { column-count: 1; } }
+
+    .card {
+      break-inside: avoid;       /* keep each image in one column block */
+      position: relative;        /* for shield overlay */
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .card img {
       display: block;
       width: 100%;
-      height: auto;               /* keep original aspect ratio */
+      height: auto;              /* keep original aspect ratio */
       -webkit-user-drag: none;
       user-drag: none;
-      pointer-events: none;       /* clicks go to shield */
+      pointer-events: none;      /* clicks go to shield */
     }
-    .shield { position: absolute; inset: 0; background: transparent; cursor: zoom-in; }
-
-    /* No gaps */
-    .masonry, .col { gap: 0; }
-    .col > * { margin: 0; }
-
-    /* 1 col mobile, 2 col tablet */
-    @media (max-width: 640px) { .masonry { display: block; } .col { width: 100vw; } }
-    @media (min-width: 641px) and (max-width: 1000px) {
-      .masonry { display: flex; }
-      .col { flex: 1 0 50%; width: 50vw; }
-      #col3 { display: none; }
+    /* Transparent overlay to catch clicks/right-clicks */
+    .shield {
+      position: absolute;
+      inset: 0;
+      background: transparent;
+      cursor: zoom-in;
     }
 
     /* Lightbox */
-    .lightbox { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.96); z-index: 1000; }
+    .lightbox {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,.96);
+      z-index: 1000;
+    }
     .lightbox.open { display: flex; }
-    .lightbox img { max-width: 96vw; max-height: 96vh; width: auto; height: auto; cursor: zoom-out; box-shadow: 0 0 40px rgba(0,0,0,.8); }
-    .close-btn { position: fixed; top: 14px; right: 14px; padding: 10px 14px; font-size: 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; z-index: 1001; cursor: pointer; backdrop-filter: blur(6px); }
+    .lightbox img {
+      max-width: 96vw; max-height: 96vh;
+      width: auto; height: auto;
+      cursor: zoom-out;
+      box-shadow: 0 0 40px rgba(0,0,0,.8);
+    }
+    .close-btn {
+      position: fixed; top: 14px; right: 14px;
+      padding: 10px 14px; font-size: 18px;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 10px;
+      background: rgba(0,0,0,.6);
+      color: #fff; z-index: 1001; cursor: pointer;
+      backdrop-filter: blur(6px);
+    }
     .close-btn:hover { background: rgba(255,255,255,.08); }
 
     /* Footer */
@@ -64,22 +87,25 @@
     footer span { display: block; }
     .contact { margin-top: 6px; font-size: 13px; }
     .contact a { color: #6ab4ff; text-decoration: none; }
-    .copy-btn { margin-left: 6px; font-size: 11px; padding: 2px 6px; cursor: pointer; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: rgba(0,0,0,.6); color: #fff; }
+    .copy-btn {
+      margin-left: 6px; font-size: 11px; padding: 2px 6px; cursor: pointer;
+      border: 1px solid rgba(255,255,255,.3); border-radius: 4px;
+      background: rgba(0,0,0,.6); color: #fff;
+    }
     .copy-btn:hover { background: rgba(255,255,255,.2); }
   </style>
 </head>
 <body>
-  <div class="masonry" id="masonry">
-    <div class="col" id="col1"></div>
-    <div class="col" id="col2"></div>
-    <div class="col" id="col3"></div>
-  </div>
+  <!-- Masonry wall -->
+  <div class="wall" id="wall"></div>
 
+  <!-- Lightbox -->
   <div class="lightbox" id="lightbox" aria-hidden="true">
     <button class="close-btn" id="closeBtn" aria-label="Close (Esc)">✕ Close</button>
     <img id="lightboxImg" alt="">
   </div>
 
+  <!-- Footer -->
   <footer>
     <span>© 2025 Askansz</span>
     <span>All rights reserved</span>
@@ -91,7 +117,7 @@
   </footer>
 
   <script>
-    /* ---------- config ---------- */
+    /* Config: list your filenames exactly as in /images/ (case-sensitive) */
     const IMAGES = [
       "Andromeda Galaxy.jpg",
       "Full Moon.png",
@@ -103,49 +129,30 @@
       "M81.jpg"
     ];
     const FOLDER = "images/";
-    /* -------- end config -------- */
 
-    const cols = [document.getElementById("col1"), document.getElementById("col2"), document.getElementById("col3")];
-    const heights = [0, 0, 0];
-    const allTiles = [];
+    const wall = document.getElementById("wall");
+    const allCards = [];
 
-    function preload(files) {
-      return Promise.all(files.map(name => new Promise((resolve) => {
-        const img = new Image();
-        img.src = FOLDER + name;
-        img.alt = name;
-        img.loading = "lazy";
-        img.decoding = "async";
-        img.addEventListener("load", () => resolve({img, name}));
-        img.addEventListener("error", () => resolve({img, name})); // still place
-      })));
-    }
+    // Build masonry (deterministic order)
+    IMAGES.forEach(name => {
+      const card = document.createElement("figure");
+      card.className = "card";
 
-    function placeTile(data) {
-      const { img } = data;
-      const tile = document.createElement("div");
-      tile.className = "tile";
-      img.className = "img";
-      tile.appendChild(img);
+      const img = new Image();
+      img.src = FOLDER + name;
+      img.alt = name;
+      img.loading = "lazy";
+      img.decoding = "async";
 
       const shield = document.createElement("div");
       shield.className = "shield";
-      shield.addEventListener("click", () => openLightbox(allTiles.indexOf(tile)));
+      shield.addEventListener("click", () => openLightbox(allCards.indexOf(card)));
       shield.addEventListener("contextmenu", e => e.preventDefault());
-      tile.appendChild(shield);
 
-      const i = heights.indexOf(Math.min(...heights));
-      cols[i].appendChild(tile);
-
-      requestAnimationFrame(() => {
-        heights[i] += tile.offsetHeight || 0; // measure actual rendered height
-      });
-
-      allTiles.push(tile);
-    }
-
-    preload(IMAGES).then(list => {
-      IMAGES.forEach(name => placeTile(list.find(x => x.name === name)));
+      card.appendChild(img);
+      card.appendChild(shield);
+      wall.appendChild(card);
+      allCards.push(card);
     });
 
     /* Lightbox */
@@ -156,7 +163,7 @@
 
     function openLightbox(idx) {
       currentIndex = Math.max(0, idx);
-      const img = allTiles[currentIndex].querySelector("img");
+      const img = allCards[currentIndex].querySelector("img");
       lightboxImg.src = img.src;
       lightbox.classList.add("open");
       lightbox.setAttribute("aria-hidden", "false");
@@ -168,26 +175,29 @@
     }
     closeBtn.addEventListener("click", closeLightbox);
     lightbox.addEventListener("click", (e) => { if (e.target === lightbox || e.target === lightboxImg) closeLightbox(); });
+    document.addEventListener("keydown", (e) => {
+      const k = (e.key || "").toLowerCase();
 
-    /* Email copy */
+      // anti-download friction
+      if ((e.ctrlKey || e.metaKey) && (k === "s" || k === "p" || k === "u")) { e.preventDefault(); return; }
+      if ((e.ctrlKey && e.shiftKey && (k === "i" || k === "j")) || k === "f12") { e.preventDefault(); return; }
+
+      // lightbox nav
+      if (!lightbox.classList.contains("open")) return;
+      if (k === "escape") closeLightbox();
+      if (k === "arrowright") openLightbox((currentIndex + 1) % allCards.length);
+      if (k === "arrowleft")  openLightbox((currentIndex - 1 + allCards.length) % allCards.length);
+    });
+
+    // Copy email
     document.getElementById("copyBtn").addEventListener("click", () => {
       const email = document.getElementById("emailLink").textContent;
       navigator.clipboard.writeText(email).then(() => alert("Email copied: " + email));
     });
 
-    /* Anti-download friction */
+    // Global contextmenu / drag disable (friction)
     document.addEventListener("contextmenu", e => e.preventDefault());
     document.addEventListener("dragstart", e => e.preventDefault());
-    document.addEventListener("keydown", (e) => {
-      const k = (e.key || "").toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && (k === "s" || k === "p" || k === "u")) e.preventDefault();
-      if ((e.ctrlKey && e.shiftKey && (k === "i" || k === "j")) || k === "f12") e.preventDefault();
-      if (lightbox.classList.contains("open")) {
-        if (k === "escape") closeLightbox();
-        if (k === "arrowright") openLightbox((currentIndex + 1) % allTiles.length);
-        if (k === "arrowleft")  openLightbox((currentIndex - 1 + allTiles.length) % allTiles.length);
-      }
-    });
   </script>
 </body>
 </html>
